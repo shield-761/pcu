@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>두더지 잡기</title>
+
+<style>
+body {
+    text-align: center;
+    font-family: Arial;
+}
+
+canvas {
+    border: 2px solid black;
+    cursor: crosshair; /* 💡 [추가] 마우스를 조준점 모양으로 변경 */
+}
+
+/* 💡 [랭킹 추가] 랭킹 게시판 스타일 */
+#rankingBoard {
+    margin: 20px auto;
+    width: 300px;
+    padding: 10px;
+    border: 2px solid #ccc;
+    background-color: #f9f9f9;
+}
+#rankingList {
+    list-style: none;
+    padding: 0;
+}
+</style>
+
+</head>
+<body>
+
+<h1>두더지 잡기</h1>
+
+<p>
+    점수 :
+    <span id="score">0</span> | 남은시간 : <span id="timeLeft">30</span>초
+</p>
+
+<!-- 💡 [난이도 추가] 난이도 선택 드롭다운 -->
+<label for="difficulty">난이도: </label>
+<select id="difficulty">
+    <option value="1500">쉬움 (느림)</option>
+    <option value="1000" selected>보통</option>
+    <option value="600">어려움 (빠름)</option>
+    <option value="400">지옥</option>
+</select>
+
+<!-- 💡 [추가] type="button"을 넣어서 클릭 시 억지로 페이지가 새로고침(초기화)되는 것을 막음 -->
+<button type="button" onclick="startGame()">게임 시작</button>
+<br><br>
+
+<canvas id="gameCanvas"
+        width="600"
+        height="400">
+</canvas>
+
+<!-- 💡 [랭킹 추가] 랭킹이 표시될 영역 -->
+<div id="rankingBoard">
+    <h3>🏆 명예의 전당 🏆</h3>
+    <ul id="rankingList">
+        <li>기록이 없습니다.</li>
+    </ul>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas"); // 캔버스 요소 가져오기
+    const ctx = canvas.getContext("2d"); // 2D 컨텍스트 가져오기 
+    const scoreText = document.getElementById("score"); // 점수 표시 요소 가져오기
+    const timeText = document.getElementById("timeLeft"); // 남은 시간 표시 요소 가져오기   
+
+    let moleX = 300; // 처음 X좌표
+    let moleY = 200; // 처음 Y좌표
+    let moleRadius = 30; // 반지름 만들기 (이미지 크기 기준으로 사용됨)
+
+    let score = 0; // 점수 초기화
+
+    let timeLeft = 30; // 게임 시간 초기화
+    let gameRunning = false; // 게임 진행 여부 초기화
+    let moleSpeed = 1000; // 두더지 이동 속도 
+    let timerId; // 타이머 변수 초기화
+    let moleMoveId; // 두더지 이동 타이머 변수 초기화
+
+    // 💡 [이미지 추가] 두더지 캐릭터 이미지 불러오기
+    const moleImg = new Image();
+    moleImg.src = "https://cdn-icons-png.flaticon.com/512/3408/3408506.png"; // 인터넷 무료 이미지 URL (원하는 이미지 파일명으로 변경 가능)
+
+    displayRanking(); // 💡 [랭킹 추가] 시작 시 저장된 랭킹 보여주기
+
+    function startGame()
+    {
+        score = 0; // 점수 초기화
+        timeLeft = 30; // 게임 시간 초기화
+        gameRunning = true; // 게임 진행 여부 초기화
+
+        // 💡 [난이도 추가] 선택한 난이도 값을 가져와서 이동 속도에 적용
+        const diffSelect = document.getElementById("difficulty");
+        moleSpeed = parseInt(diffSelect.value);
+
+        scoreText.textContent = score; // 점수 표시 초기화
+        timeText.textContent = timeLeft; // 남은 시간 표시 초기화
+
+        clearInterval(timerId); // 이전 타이머 초기화
+        clearInterval(moleMoveId); // 이전 두더지 이동 타이머 초기화
+
+        moveMole(); // 두더지 위치 변경
+        timerId = setInterval(() => {
+            timeLeft--; // 남은 시간 감소
+            timeText.textContent = timeLeft; // 남은 시간 표시 업데이트
+            if (timeLeft <= 0) {
+                endGame(); // 게임 종료
+            }
+        }, 1000);
+        moleMoveId = setInterval(moveMole, moleSpeed); // 두더지 이동 타이머 시작
+    }
+    
+    function endGame()
+    {
+        gameRunning = false; // 게임 진행 여부 초기화
+        clearInterval(timerId); // 타이머 초기화
+        clearInterval(moleMoveId); // 두더지 이동 타이머 초기화
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 캔버스 초기화  
+        ctx.font = "30px Arial"; // 폰트 설정
+        ctx.fillStyle = "black"; // 글자 색 설정
+        ctx.textAlign = "center"; // 글자 정렬 설정 
+        ctx.fillText("게임 종료! 점수: " + score, canvas.width / 2,180); // 게임 종료 메시지 표시
+        ctx.fillText("최종 점수: " + score, canvas.width / 2, 230); // 최종 점수 표시
+
+        // 💡 [랭킹 추가] 게임이 끝나면 현재 점수를 기록
+        updateRanking(score);
+    }
+
+    function drawMole()
+    {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 캔버스 초기화
+        
+        // 💡 [이미지 추가] 원을 그리는 코드 대신 이미지를 그리는 코드로 변경
+        // 이미지의 중심을 맞추기 위해 x, y 좌표에서 반지름만큼 빼줍니다.
+        ctx.drawImage(moleImg, moleX - moleRadius, moleY - moleRadius, moleRadius * 2, moleRadius * 2);
+    }
+    drawMole() //두더지 그리기
+
+    function moveMole()
+    {
+        moleX = Math.random() * (canvas.width - 80) + 40; //숫자는 두더지가 프레임 안에서 나가지 않게 조정
+        moleY = Math.random() * (canvas.height - 80) + 40; //숫자는 두더지가 프레임 안에서 나가지 않게 조정
+        drawMole(); //두더지 그리기
+    }
+
+    canvas.addEventListener("click", function(event)
+    {
+        // 💡 [추가] 게임 시간이 끝나면 캔버스를 클릭해도 아무 반응이 없게 막아줌
+        if (!gameRunning) return; 
+
+        const rect = canvas.getBoundingClientRect(); // 캔버스의 위치와 크기 정보를 가져옴
+        const mouseX = event.clientX - rect.left; // 마우스 클릭 좌표
+        const mouseY = event.clientY - rect.top; // 마우스 클릭 좌표
+
+        const dx = mouseX - moleX; // 두더지와 마우스 클릭 좌표 사이의 X축 거리
+        const dy = mouseY - moleY; // 두더지와 마우스 클릭 좌표 사이의 Y축 거리
+        const distance = Math.sqrt(dx * dx + dy * dy); // 두더지와 마우스 클릭 좌표 사이의 직선거리
+        
+        if (distance <= moleRadius)
+        {
+            score++; // 점수 증가
+            document.getElementById("score").textContent = score; // 점수 표시
+            moveMole(); // 두더지 위치 변경
+            
+            // 💡 [추가] 두더지를 잡았을 때 타이머가 겹쳐서 미친 듯이 깜빡이는 현상(무한로딩) 방지
+            clearInterval(moleMoveId); 
+            moleMoveId = setInterval(moveMole, moleSpeed); 
+        }
+    });
+
+    // 💡 [랭킹 추가] 랭킹을 저장하는 함수 (로컬 스토리지 사용)
+    function updateRanking(newScore)
+    {
+        if (newScore === 0) return; // 0점은 기록하지 않음
+
+        let rankings = JSON.parse(localStorage.getItem("myMoleRankings")) || [];
+        
+        // 날짜 데이터 추가
+        const today = new Date();
+        const dateStr = today.getMonth() + 1 + "/" + today.getDate() + " " + today.getHours() + ":" + today.getMinutes();
+        
+        rankings.push({ score: newScore, date: dateStr });
+
+        // 점수 순으로 내림차순 정렬
+        rankings.sort(function(a, b) {
+            return b.score - a.score;
+        });
+
+        // 최대 5등까지만 유지
+        rankings = rankings.slice(0, 5);
+
+        localStorage.setItem("myMoleRankings", JSON.stringify(rankings));
+        displayRanking(); // 화면 업데이트
+    }
+
+    // 💡 [랭킹 추가] 랭킹을 화면에 보여주는 함수
+    function displayRanking()
+    {
+        const list = document.getElementById("rankingList");
+        let rankings = JSON.parse(localStorage.getItem("myMoleRankings")) || [];
+
+        if (rankings.length > 0)
+        {
+            list.innerHTML = ""; // 기존 목록 비우기
+            for (let i = 0; i < rankings.length; i++)
+            {
+                const li = document.createElement("li");
+                li.textContent = (i + 1) + "등 : " + rankings[i].score + "점 (" + rankings[i].date + ")";
+                list.appendChild(li);
+            }
+        }
+    }
+</script>
+</body>
+</html>
