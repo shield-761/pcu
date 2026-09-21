@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>공 잡기 게임</title>
+
+<style>
+body{
+    text-align:center;
+    font-family:Arial;
+}
+
+canvas{
+    border:2px solid black;
+}
+</style>
+
+</head>
+<body>
+
+<h1>공 잡기 게임</h1>
+
+<p>
+점수 : <span id="score">0</span> | 
+남은 시간 : <span id="timeLeft">30</span>초 |
+속도 : <span id="speed">1</span> 단계 
+</p>
+
+<!-- 💡 [AI 추가] 난이도 선택 드롭다운 메뉴 추가 -->
+<label for="difficulty">난이도: </label>
+<select id="difficulty">
+    <option value="easy">1단계: 쉬움 (공 큼)</option>
+    <option value="normal" selected>2단계: 보통 (기본)</option>
+    <option value="hard">3단계: 어려움 (공 작음)</option>
+</select>
+
+<!-- type="button"을 넣어서 클릭 시 억지로 페이지가 새로고침(초기화)되는 것을 막음 -->
+<button type="button" onclick="startGame()">게임 시작</button> 
+
+<canvas
+    id="gameCanvas"
+    width="600"
+    height="400">
+</canvas>
+<script>
+    const canvas = document.getElementById("gameCanvas"); //캔버스 요소를 가져옴
+    const ctx = canvas.getContext("2d"); //캔버스의 2D 컨텍스트를 가져옴
+
+    const scoreText = document.getElementById("score"); //점수 표시 영역
+    const speedText = document.getElementById("speed"); //속도 표시 영역
+    const timeText = document.getElementById("timeLeft"); //남은 시간 표시 영역
+
+    let score = 0; //점수 초기화
+    let speedLevel = 1; //속도 초기화
+    let timeLeft = 30; //남은 시간 초기화
+    let timerId; //타이머 ID를 저장할 변수
+    let animId; //애니메이션 ID를 저장할 변수
+    let gameRunning = false; //게임 진행 상태를 저장할 변수
+
+    function startGame(){
+        if (animId) cancelAnimationFrame(animId); //이전 애니메이션이 있으면 취소
+        timeLeft = 30; //남은 시간 초기화
+        score = 0; //점수 초기화
+        speedLevel = 1; //속도 초기화
+
+        // 💡 [AI 추가] 게임 시작 시 선택한 난이도에 따라 공의 크기(radius)를 3단계로 다르게 설정
+        const difficultyValue = document.getElementById("difficulty").value;
+        if (difficultyValue === "easy") {
+            ball.radius = 35; // 1단계: 쉬움 (공이 큼)
+        } else if (difficultyValue === "normal") {
+            ball.radius = 25; // 2단계: 보통 (기본 크기)
+        } else if (difficultyValue === "hard") {
+            ball.radius = 15; // 3단계: 어려움 (공이 작음)
+        }
+
+        ball.x = 300; //공의 초기 x좌표
+        ball.y = 200; //공의 초기 y좌표
+        ball.dx = 3; //공의 초기 x방향 속도
+        ball.dy = 2; //공의 초기 y방향 속도
+
+        gameRunning = true; //게임 진행 상태를 true로 설정
+
+        clearInterval(timerId); //이전 타이머가 있으면 취소
+        timerId = setInterval(() => { //1초마다 실행되는 타이머
+            timeLeft--; //남은 시간 감소
+            timeText.textContent = timeLeft; //남은 시간 표시 업데이트
+            if (timeLeft <= 0 ) endGame();//시간이 0이 되면 게임 종료
+
+        },1000) //1초마다 남은 시간을 감소시키고 표시
+        scoreText.textContent = score; //점수 표시 업데이트
+        speedText.textContent = speedLevel; //속도 표시 업데이트
+        
+        drawGame(); //게임을 시작(얘를 해야 공이 초기화 되고 공이 움직임)
+    }
+
+    function endGame(){ 
+        gameRunning = false; //게임 진행 상태를 false로 설정
+        cancelAnimationFrame(animId); //애니메이션 취소
+        clearInterval(timerId); //타이머 취소
+        
+        ctx.clearRect(0,0, canvas.width,canvas.height); //캔버스 초기화
+        ctx.font = "32px Arial"; //폰트 설정
+        ctx.fillStyle = "black"; //글자 색 설정
+        ctx.textAlign = "center"; //글자 정렬 설정
+        ctx.fillText("게임 종료!",canvas.width / 2, canvas.height / 2 - 30); //게임 종료 메시지 표시
+        ctx.fillText("최종 점수 : " + score,canvas.width / 2, canvas.height / 2 + 20); //최종 점수 표시
+    }
+
+    const ball = { //공의 속성
+        x:300, y:200, radius:25, dx:3, dy:2 //공의 위치와 반지름, 이동속도
+    };
+    
+    function drawBall(){ //공을 그리는 함수
+        ctx.beginPath(); //공을 그리기 시작
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2); // 공의 위치와 반지름을 설정
+        ctx.fillStyle = "tomato"; //공의 색상 설정
+        ctx.fill(); //공을 채우기
+    }
+    //drawBall(); //공을 그리는 함수 호출
+    
+    function updateBall(){ //공의 위치를 업데이트하는 함수
+        ball.x += ball.dx; //이동하는 x좌표
+        ball.y += ball.dy; //이동하는 y좌표
+
+        if (ball.x + ball.radius >canvas.width || ball.x - ball.radius < 0){ //공이 캔버스의 오른쪽이나 왼쪽에 닿으면
+            ball.dx = -ball.dx; //공의 이동방향을 반대로 바꿈
+        }
+        if (ball.y + ball.radius >canvas.height || ball.y - ball.radius < 0){ //공이 캔버스의 위쪽이나 아래쪽에 닿으면
+            ball.dy = -ball.dy; //공의 이동방향을 반대로 바꿈
+        }
+    }
+
+    function drawGame(){
+        ctx.clearRect(0,0,canvas.width,canvas.height); // 캔버스 지우기
+        drawBall(); //공을 그리는 함수 호출
+        updateBall(); //공의 위치를 업데이트하는 함수 호출
+        animId = requestAnimationFrame(drawGame); //다음 프레임을 요청하여 게임을 계속 진행
+    }
+    
+    drawGame(); //게임을 시작(얘를 해야 공이 초기화 되고 공이 움직임)
+    //setInterval(drawGame, 1000/60); //60fps로 게임을 진행
+
+    canvas.addEventListener("click", function(event){ //캔버스 클릭 이벤트 리스너
+        const rect = canvas.getBoundingClientRect();//캔버스의 위치와 크기 정보를 가져옴
+        const mouseX = event.clientX - rect.left; //마우스 클릭 좌표
+        const mouseY = event.clientY - rect.top; //마우스 클릭 좌표
+
+        const dx = mouseX - ball.x; //공과 마우스 클릭 좌표 사이의 X축 거리
+        const dy = mouseY - ball.y; //공과 마우스 클릭 좌표 사이의 Y축 거리
+        const distance = Math.sqrt(dx * dx + dy * dy); //공과 마우스 클릭 좌표 사이의 직선거리
+
+        if (distance <= ball.radius){ //공을 클릭했는지 확인
+            if (gameRunning){ //게임이 진행 중일 때 실행
+                score++; //점수 증가
+                scoreText.textContent = score; //점수 표시 업데이트
+                
+                speedLevel++; //속도 증가
+                speedText.textContent = speedLevel; //속도 표시 업데이트
+                
+                if (ball.dx > 0){ //공의 이동방향에 따라 속도를 증가시키기 위해 이동속도에 0.5를 더함
+                    ball.dx += 0.5; //공의 이동방향 x가 양수이면 이동속도에 0.5를 더함
+                } else { 
+                    ball.dx -= 0.5; //공의 이동방향 x가 음수이면 이동속도에 0.5를 더함
+                }
+                if (ball.dy > 0){ //공의 이동방향에 따라 속도를 증가시키기 위해 이동속도에 0.5를 더함
+                    ball.dy += 0.5; //공의 이동방향 y가 양수이면 이동속도에 0.5를 더함
+                } else {
+                    ball.dy -= 0.5; //공의 이동방향 y가 음수이면 이동속도에 0.5를 더함
+                }
+                
+                moveBallRandom(); //공을 랜덤한 위치로 이동시키는 함수 호출
+            }
+        }
+    })
+
+    function moveBallRandom(){ //공을 랜덤한 위치로 이동시키는 함수
+        ball.x = Math.random() * (canvas.width - ball.radius * 2)+ ball.radius; //공이 캔버스 안에서 랜덤한 x좌표로 이동(random은 0~1사이의 값을 랜덤으로 호출)
+        ball.y = Math.random() * (canvas.height - ball.radius * 2)+ ball.radius; //공이 캔버스 안에서 랜덤한 y좌표로 이동(random은 0~1사이의 값을 랜덤으로 호출)
+        
+        // 💡 [AI 수정] 공을 잡을 때마다 이동 방향(dx, dy)도 무작위로 섞어주어 리셋 느낌을 확 살림
+        ball.dx = (Math.random() > 0.5 ? 1 : -1) * (Math.abs(ball.dx));
+        ball.dy = (Math.random() > 0.5 ? 1 : -1) * (Math.abs(ball.dy));
+    }
+</script>
+</body>
+</html>

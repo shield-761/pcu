@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>공 잡기 게임</title>
+
+<style>
+body{
+    text-align:center;
+    font-family:Arial;
+}
+
+canvas{
+    border:2px solid black;
+}
+</style>
+
+</head>
+<body>
+
+<h1>예제 1: 무지개과녁</h1>
+
+<p>
+점수 :
+<span id="score">0</span>
+</p>
+
+<canvas
+    id="gameCanvas"
+    width="600"
+    height="400">
+</canvas>
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    const circles = [
+        {color : "red",radius:120},
+        {color : "orange",radius:95},
+        {color : "yellow",radius:70},
+        {color : "green",radius:45},
+        {color : "blue",radius:20}
+    ]
+
+    function drawCircles(){
+        circles.forEach(circle => {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, circle.radius, 0, Math.PI*2);
+            ctx.fillStyle = circle.color;
+            ctx.fill();
+        });
+    }
+    drawCircles();
+</script>
+</body>
+</html>
