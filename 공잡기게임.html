@@ -119,6 +119,9 @@ canvas{
     //drawBall(); //공을 그리는 함수 호출
     
     function updateBall(){ //공의 위치를 업데이트하는 함수
+        // 💡 [AI 수정] 게임이 시작되지 않았다면(gameRunning이 false면) 공이 움직이지 않고 멈춰있도록 함
+        if (!gameRunning) return;
+
         ball.x += ball.dx; //이동하는 x좌표
         ball.y += ball.dy; //이동하는 y좌표
 
@@ -177,7 +180,6 @@ canvas{
         ball.x = Math.random() * (canvas.width - ball.radius * 2)+ ball.radius; //공이 캔버스 안에서 랜덤한 x좌표로 이동(random은 0~1사이의 값을 랜덤으로 호출)
         ball.y = Math.random() * (canvas.height - ball.radius * 2)+ ball.radius; //공이 캔버스 안에서 랜덤한 y좌표로 이동(random은 0~1사이의 값을 랜덤으로 호출)
         
-        // 💡 [AI 수정] 공을 잡을 때마다 이동 방향(dx, dy)도 무작위로 섞어주어 리셋 느낌을 확 살림
         ball.dx = (Math.random() > 0.5 ? 1 : -1) * (Math.abs(ball.dx));
         ball.dy = (Math.random() > 0.5 ? 1 : -1) * (Math.abs(ball.dy));
     }
