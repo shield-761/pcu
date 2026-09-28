@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pong 게임</title>
+
+    <style>
+        body {
+            text-align: center; /* 전체 요소를 화면 가운데로 정렬 */
+            font-family: Arial; /* 기본 폰트를 Arial로 지정 */
+            background: #f5f5f5; /* 전체 배경색을 연한 회색으로 지정 */
+        }
+
+        canvas {
+            border: 2px solid black; /* 캔버스 테두리를 검은색 실선으로 설정 */
+            background: #111; /* 캔버스 내부 배경을 검은색에 가까운 어두운색으로 지정 */
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Pong 게임</h1>
+    <p>왼쪽 플레이어: W / S | 오른쪽 플레이어: ↑ / ↓</p>
+    <p>왼쪽 점수: <span id="leftScore">0</span> | 오른쪽 점수: <span id="rightScore">0</span></p> <!-- 점수 표시용 span 태그 -->
+
+    <canvas id="gameCanvas" width="700" height="400"></canvas> <!-- 게임이 그려질 가로 700, 세로 400 캔버스 -->
+
+</body>
+<script>
+    const canvas = document.getElementById("gameCanvas"); // 캔버스 엘리먼트 가져오기
+    const ctx = canvas.getContext("2d"); // 2D 그래픽을 그리기 위한 컨텍스트 가져오기
+
+    const leftScoreText = document.getElementById("leftScore"); // 왼쪽 점수 HTML 요소 가져오기
+    const rightScoreText = document.getElementById("rightScore"); // 오른쪽 점수 HTML 요소 가져오기
+
+    let leftScore = 0; // 왼쪽 플레이어 점수 변수
+    let rightScore = 0; // 오른쪽 플레이어 점수 변수
+
+    function drawCenterLine(){ // [함수] 화면 중앙의 흰색 점선을 그려주는 함수
+        ctx.setLineDash([10, 10]); // 10px 그리고 10px 띄우는 점선 패턴 설정
+        ctx.beginPath(); // 새로운 선 그리기 시작
+        ctx.moveTo(canvas.width / 2, 0); // 선의 시작점을 화면 상단 중앙으로 이동
+        ctx.lineTo(canvas.width / 2, canvas.height); // 선의 끝점을 화면 하단 중앙으로 지정
+        ctx.strokeStyle = "white"; // 선 색상을 흰색으로 지정
+        ctx.stroke(); // 캔버스에 실제로 선 그리기
+        ctx.setLineDash([]); // 점선 패턴을 초기화하여 다른 그림에 영향 안 주게 함
+    }
+
+    const ball = {
+        x: canvas.width / 2, // 공의 초기 X 위치 (화면 중앙)
+        y: canvas.height / 2, // 공의 초기 Y 위치 (화면 중앙)
+        radius: 10, // 공의 반지름 (10px)
+        dx: 5, // X축 이동 속도 (양수: 오른쪽, 음수: 왼쪽)
+        dy: 3 // Y축 이동 속도 (양수: 아래, 음수: 위)
+    };
+
+
+    function drawBall() { // [함수] 화면에 흰색 원(공)을 그려주는 함수
+        ctx.beginPath(); // 공 그리기 시작
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); // (x, y) 위치에 반지름 10짜리 완전한 원 생성
+        ctx.fillStyle = "white"; // 채우기 색상을 흰색으로 지정
+        ctx.fill(); // 원 내부를 흰색으로 채움
+        ctx.closePath(); // 그리기 경로 닫기
+    }
+
+    function moveBall() { // [함수] 공을 이동시키고 벽/패들 충돌 및 득점을 판정하는 함수
+        ball.x += ball.dx; // 공의 X 위치를 속도(dx)만큼 이동
+        ball.y += ball.dy; // 공의 Y 위치를 속도(dy)만큼 이동
+
+        if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+            ball.dy *= -1; // Y축 이동 방향 반전 (위/아래 튕김)
+        }
+
+        if(isBallHitPaddle(leftPaddle)){ // 공이 왼쪽 패들에 부딪힌 경우
+            ball.dx = Math.abs(ball.dx); // X축 속도를 양수로 만들어 오른쪽으로 반사
+        }
+
+        if(isBallHitPaddle(rightPaddle)){ // 공이 오른쪽 패들에 부딪힌 경우
+            ball.dx = -Math.abs(ball.dx); // X축 속도를 음수로 만들어 왼쪽으로 반사
+        }
+
+        if(ball.x - ball.radius < 0){ // 공이 왼쪽 벽을 넘어간 경우
+            rightScore++; // 오른쪽 플레이어 점수 1 증가
+            rightScoreText.textContent = rightScore; // 오른쪽 점수 화면 갱신
+            resetBall(); // 공을 가운데로 초기화
+        }
+
+        if(ball.x + ball.radius > canvas.width){ // 공이 오른쪽 벽을 넘어간 경우
+            leftScore++; // 왼쪽 플레이어 점수 1 증가
+            leftScoreText.textContent = leftScore; // 왼쪽 점수 화면 갱신
+            resetBall(); // 공을 가운데로 초기화
+        }
+
+    }
+
+    function isBallHitPaddle(paddle){ // [함수] 공과 전달받은 패들 간의 충돌 여부를 검사하여 true/false를 반환하는 함수
+        return (
+            ball.x - ball.radius < paddle.x + paddle.width && // 공의 왼쪽 끝이 패들의 오른쪽 끝보다 왼쪽에 있고
+            ball.x + ball.radius > paddle.x &&                // 공의 오른쪽 끝이 패들의 왼쪽 끝보다 오른쪽에 있고
+            ball.y - ball.radius < paddle.y + paddle.height &&// 공의 위쪽 끝이 패들의 아래쪽 끝보다 위쪽에 있고
+            ball.y + ball.radius > paddle.y                   // 공의 아래쪽 끝이 패들의 위쪽 끝보다 아래쪽에 있는지 확인
+        );
+    }
+
+    const keys = {}; // 현재 눌려있는 키 상태를 저장할 객체 생성
+
+    document.addEventListener("keydown", function (event){ // [이벤트] 키보드 누름 감지 시 작동하는 익명 함수
+        keys[event.key] = true; // 키보드 키가 눌리면 keys 객체에 해당 키값을 true로 저장
+    });
+    
+    document.addEventListener("keyup", function (event){ // [이벤트] 키보드 뗌 감지 시 작동하는 익명 함수
+        keys[event.key] = false; // 키보드 키에서 손을 떼면 해당 키값을 false로 저장
+    });
+
+    function movePaddles(){ // [함수] 눌린 키 상태(keys)에 따라 왼쪽/오른쪽 패들을 움직이는 함수
+        if (keys["w"] || keys["W"]){ // W 키가 눌려있으면
+            leftPaddle.y -= leftPaddle.speed; // 왼쪽 패들을 위로 이동
+        }
+        if(keys["s"] || keys["S"]){ // S 키가 눌려있으면
+            leftPaddle.y += leftPaddle.speed; // 왼쪽 패들을 아래로 이동
+        }
+        keepPaddleInside(leftPaddle); // 왼쪽 패들이 캔버스 화면 밖으로 나가지 않게 제한
+    }
+
+    function moveAi(){ // [함수] 인공지능(AI)이 공의 Y 위치를 추적하여 오른쪽 패들을 움직이는 함수
+        const aiCenter = rightPaddle.y + rightPaddle.height / 2; // 오른쪽 패들의 세로 중앙 Y 위치 계산
+        const speed = 5; // AI 패들의 이동 속도 설정
+
+        if(ball.y < aiCenter){ // 공이 AI 패들 중앙보다 위에 있으면
+            rightPaddle.y -= speed; // AI 패들을 위로 이동
+        }
+        else{ // 공이 AI 패들 중앙보다 아래에 있으면
+            rightPaddle.y += speed; // AI 패들을 아래로 이동
+        }
+        keepPaddleInside(rightPaddle); // AI 패들이 캔버스 화면 밖으로 나가지 않게 제한
+    }
+
+    function keepPaddleInside(paddle){ // [함수] 패들이 캔버스 상단/하단 영역 밖으로 나가지 못하게 위치를 제한하는 함수
+        if(paddle.y < 0){ // 패들의 상단 위치가 0보다 작아지면 (위쪽 벽 이탈 시)
+            paddle.y = 0; // 패들 위치를 화면 맨 위(0)로 고정
+        }
+        if(paddle.y + paddle.height > canvas.height){ // 패들의 하단 위치가 캔버스 높이보다 커지면 (아래쪽 벽 이탈 시)
+            paddle.y = canvas.height - paddle.height; // 패들 위치를 화면 맨 아래로 고정
+        }
+    }
+
+
+    function resetBall(){ // [함수] 득점 후 공을 화면 중앙으로 되돌리고 속도를 재설정하는 함수
+        ball.x = canvas.width / 2; // 공의 X 위치를 화면 중앙으로 설정
+        ball.y = canvas.height / 2; // 공의 Y 위치를 화면 중앙으로 설정
+        ball.dx *= -1; // 공이 날아가던 방향의 반대로 서브
+        ball.dy = Math.random() * 6 - 3; // -3 ~ 3 사이의 랜덤한 Y축 속도 부여
+        if(ball.dy == 0){ // Y축 속도가 0이 되어 일직선으로 이동하는 것 방지
+            ball.dy = 3; // 속도가 0이면 3으로 변경
+        }
+    }
+
+    const paddleWidth = 12; // 패들의 가로 너비 (12px)
+    const paddleHeight = 80; // 패들의 세로 높이 (80px)
+
+    const leftPaddle = {
+        x: 30, // 왼쪽 패들의 X 위치 (왼쪽 벽에서 30px 떨어진 곳)
+        y: canvas.height / 2 - paddleHeight / 2, // 왼쪽 패들의 Y 위치 (세로 중앙)
+        width: paddleWidth, // 패들 너비
+        height: paddleHeight, // 패들 높이
+        speed: 6 // 패들 이동 속도
+    };
+
+    const rightPaddle = {
+        x: canvas.width  - 30 - paddleWidth, // 오른쪽 패들의 X 위치
+        y: canvas.height / 2 - paddleHeight / 2, // 오른쪽 패들의 Y 위치 (세로 중앙)
+        width: paddleWidth, // 패들 너비
+        height: paddleHeight, // 패들 높이
+        speed: 6 // 패들 이동 속도
+    };
+
+    function drawRect(rect){ // [함수] 전달받은 사각형 객체(패들 등)를 화면에 그려주는 함수
+        ctx.fillStyle = "white"; // 사각형 채우기 색상 지정 (흰색)
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height); // 지정된 위치와 크기로 사각형 그리기
+    }
+
+    function drawGame() { // [함수] 화면을 지우고 게임 상태를 갱신하며 매 프레임마다 그리는 메인 루프 함수
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 이전 프레임의 잔상을 싹 지움
+        drawCenterLine(); // 중앙선 다시 그리기
+        moveBall(); // 공 이동 및 벽/득점/패들 충돌 처리
+        drawBall(); // 새로운 위치에 공 다시 그리기
+        drawRect(leftPaddle); // 왼쪽 패들 그리기
+        drawRect(rightPaddle); // 오른쪽 패들 그리기
+        moveAi(); // AI 패들 자동 이동 계산
+        movePaddles(); // 키보드 입력 상태에 맞춰 패들 위치 이동 및 이탈 방지 처리
+        
+        
+        requestAnimationFrame(drawGame); // 다음 프레임마다 drawGame 재귀 호출 (루프)
+    }
+
+    drawGame(); // 게임 시작
+</script>
+
+</html>
