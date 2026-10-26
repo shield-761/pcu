@@ -11,7 +11,7 @@
             background: #f9f9f9;
         }
 
-        /* [추가 기능] 게임 캔버스와 결과 오버레이 팝업을 겹쳐서 배치하기 위한 부모 컨테이너 */
+        /* 게임 캔버스와 결과 오버레이 팝업을 겹쳐서 배치하기 위한 부모 컨테이너 */
         .game-container {
             position: relative;
             display: inline-block;
@@ -40,7 +40,7 @@
             border-radius: 4px;
         }
 
-        /* [추가 기능] 현재 선택된 난이도 버튼을 시각적으로 강조하는 스타일 */
+        /* 현재 선택된 난이도 버튼을 시각적으로 강조하는 스타일 */
         button.active {
             background-color: #4CAF50;
             color: white;
@@ -48,7 +48,7 @@
             border-color: #4CAF50;
         }
 
-        /* [추가 기능] 게임 오버 또는 승리 시 화면 전체를 어둡게 덮는 오버레이 레이어 스타일 */
+        /* 게임 오버 또는 승리 시 화면 전체를 어둡게 덮는 오버레이 레이어 스타일 */
         #gameOverScreen {
             position: absolute;
             top: 0;
@@ -75,7 +75,7 @@
             margin-bottom: 20px;
         }
 
-        /* [추가 기능] 다시 시작하기 버튼의 색상 및 디자인 */
+        /* 다시 시작하기 버튼의 색상 및 디자인 */
         #restartBtn {
             padding: 10px 20px;
             font-size: 16px;
@@ -96,11 +96,9 @@
 <body>
     <h1>장애물 피하기 게임</h1>
     
-    <!-- 난이도 표시용 텍스트 추가 -->
     <h3 id="difficultyText">2단계 (보통)</h3>
     
     <div class="difficulty-buttons">
-        <!-- 난이도 수치는 타이머(바위 생성 주기)를 의미하도록 ms 단위로 수정했습니다 -->
         <button id="btn1" onclick="setDifficulty(1, 1500)">1단계 (쉬움)</button>
         <button id="btn2" class="active" onclick="setDifficulty(2, 1000)">2단계 (보통)</button>
         <button id="btn3" onclick="setDifficulty(3, 500)">3단계 (어려움)</button>
@@ -109,11 +107,9 @@
     <p>점수: <span id="score">0</span> / 30 | 체력: <span id="hp">100</span></p>
     <p>조작: 방향키 ↑ ↓ ← → (30점 달성 시 승리!)</p>
     
-    <!-- 캔버스와 오버레이 화면을 겹치기 위해 div로 감싸기 -->
     <div class="game-container">
         <canvas id="gameCanvas" width="600" height="400"></canvas>
         
-        <!-- 게임 오버/승리 시 나타날 오버레이 화면 -->
         <div id="gameOverScreen">
             <h2 id="resultTitle">게임 오버</h2>
             <p>최종 점수: <span id="finalScore">0</span></p>
@@ -135,7 +131,6 @@
     let currentLevel = localStorage.getItem("player_level") ? parseInt(localStorage.getItem("player_level")) : 2;
     let rockSpawnRate = localStorage.getItem("rock_speed") ? parseInt(localStorage.getItem("rock_speed")) : 1000;
     
-    // rockInterval: 바위 생성 타이머 / animationId: 화면 그리기 프레임
     let rockInterval = null; 
     let animationId = null;
 
@@ -184,7 +179,6 @@
             y: -30,
             width: 30,
             height: 30,
-            // 난이도(currentLevel)가 높을수록 바위가 떨어지는 속도도 약간 증가
             speed: (Math.random() * 3 + 2) + (currentLevel * 0.5), 
             damage: 20
         };
@@ -210,8 +204,7 @@
                 score++;
                 scoreText.textContent = score;
                 
-                // 50점 도달 시 승리 처리
-                if (score >= 50) {
+                if (score >= 30) {
                     winGame();
                 }
             }
@@ -242,13 +235,11 @@
         ctx.fillStyle = 'lightgray';
         ctx.fillRect(20, 20, 200, 20);
         ctx.fillStyle = 'limegreen';
-        if (hp < 30) ctx.fillStyle = 'red'; // 체력이 낮으면 빨간색으로 변경
+        if (hp < 30) ctx.fillStyle = 'red'; 
         ctx.fillRect(20, 20, hp * 2, 20);
         ctx.strokeStyle = 'black';
         ctx.strokeRect(20, 20, 200, 20);
     }
-
-    // --- 게임 상태 관리 함수들 ---
 
     function initDifficultyUI() {
         document.getElementById("btn1").classList.remove("active");
@@ -269,19 +260,16 @@
         localStorage.setItem("rock_speed", rate);
 
         initDifficultyUI();
-
-        // 게임 진행 중일 경우 바위 생성 타이머(setInterval)만 갱신
-        if (!gameOver) {
-            clearInterval(rockInterval);
-            rockInterval = setInterval(createRock, rockSpawnRate);
-        }
+        
+        // 난이도 변경 시 게임을 완전히 초기화하고 다시 시작합니다.
+        restartGame();
     }
 
     function endGame() {
         gameOver = true;
         resultTitle.textContent = "게임 오버 😭";
         finalScore.textContent = score;
-        gameOverScreen.style.display = "flex"; // CSS flex를 사용해 가운데 정렬
+        gameOverScreen.style.display = "flex"; 
     }
 
     function winGame() {
@@ -292,7 +280,11 @@
     }
 
     function restartGame() {
-        // 모든 변수와 위치를 초기화
+        // 중복 실행 방지를 위해 기존 프레임 취소
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+        }
+
         gameOver = false;
         score = 0;
         hp = 100;
@@ -305,11 +297,9 @@
         
         gameOverScreen.style.display = "none";
 
-        // 기존 바위 타이머를 초기화하고 새로 시작
         clearInterval(rockInterval);
         rockInterval = setInterval(createRock, rockSpawnRate);
         
-        // 애니메이션 루프 재실행
         gameLoop();
     }
 
