@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>장애물 피하기 게임</title>
+    <style>
+        /* 웹페이지 전체의 텍스트 정렬 및 기본 폰트 설정 */
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+        }
+
+        /* [추가 기능] 게임 캔버스와 결과 오버레이 팝업을 겹쳐서 배치하기 위한 부모 컨테이너 */
+        .game-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* 게임이 그려지는 캔버스 영역 테두리 및 배경색 지정 */
+        canvas {
+            border: 2px solid black;
+            background: #ffffff;
+            display: block;
+        }
+
+        /* 난이도 버튼들이 배치되는 영역의 여백 설정 */
+        .difficulty-buttons {
+            margin: 10px;
+        }
+
+        /* 공통 버튼 크기 및 디자인 스타일 */
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            margin: 0 5px;
+            border: 1px solid #ccc;
+            background-color: #eee;
+            border-radius: 4px;
+        }
+
+        /* [추가 기능] 현재 선택된 난이도 버튼을 시각적으로 강조하는 스타일 */
+        button.active {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            border-color: #4CAF50;
+        }
+
+        /* [추가 기능] 게임 오버 또는 승리 시 화면 전체를 어둡게 덮는 오버레이 레이어 스타일 */
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7); /* 반투명 검은색 배경 */
+            display: none; /* 평소에는 숨겨져 있음 */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        /* 결과 화면의 안내 제목 폰트 크기 및 여백 */
+        #gameOverScreen h2 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        /* 결과 화면의 점수 표시 폰트 크기 및 여백 */
+        #gameOverScreen p {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* [추가 기능] 다시 시작하기 버튼의 색상 및 디자인 */
+        #restartBtn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #ff5722;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        /* 다시 시작하기 버튼에 마우스를 올렸을 때의 색상 변화 */
+        #restartBtn:hover {
+            background-color: #e64a19;
+        }
+    </style>
+</head>
+<body>
+    <h1>장애물 피하기 게임</h1>
+    
+    <!-- 난이도 표시용 텍스트 추가 -->
+    <h3 id="difficultyText">2단계 (보통)</h3>
+    
+    <div class="difficulty-buttons">
+        <!-- 난이도 수치는 타이머(바위 생성 주기)를 의미하도록 ms 단위로 수정했습니다 -->
+        <button id="btn1" onclick="setDifficulty(1, 1500)">1단계 (쉬움)</button>
+        <button id="btn2" class="active" onclick="setDifficulty(2, 1000)">2단계 (보통)</button>
+        <button id="btn3" onclick="setDifficulty(3, 500)">3단계 (어려움)</button>
+    </div>
+    
+    <p>점수: <span id="score">0</span> / 30 | 체력: <span id="hp">100</span></p>
+    <p>조작: 방향키 ↑ ↓ ← → (30점 달성 시 승리!)</p>
+    
+    <!-- 캔버스와 오버레이 화면을 겹치기 위해 div로 감싸기 -->
+    <div class="game-container">
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        
+        <!-- 게임 오버/승리 시 나타날 오버레이 화면 -->
+        <div id="gameOverScreen">
+            <h2 id="resultTitle">게임 오버</h2>
+            <p>최종 점수: <span id="finalScore">0</span></p>
+            <button id="restartBtn" onclick="restartGame()">다시 시작하기</button>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const scoreText = document.getElementById('score');
+    const hpText = document.getElementById('hp');
+    const difficultyText = document.getElementById('difficultyText');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const resultTitle = document.getElementById('resultTitle');
+    const finalScore = document.getElementById('finalScore');
+
+    let currentLevel = localStorage.getItem("player_level") ? parseInt(localStorage.getItem("player_level")) : 2;
+    let rockSpawnRate = localStorage.getItem("rock_speed") ? parseInt(localStorage.getItem("rock_speed")) : 1000;
+    
+    // rockInterval: 바위 생성 타이머 / animationId: 화면 그리기 프레임
+    let rockInterval = null; 
+    let animationId = null;
+
+    const player = {
+        x: 280,
+        y: 330,
+        width: 40,
+        height: 40,
+        speed: 6
+    };
+
+    let rocks = [];
+    let score = 0;
+    let hp = 100;
+    let gameOver = false;
+    const keys = {};
+
+    document.addEventListener('keydown', function(event) {
+        keys[event.key] = true;
+    });
+    document.addEventListener('keyup', function(event) {
+        keys[event.key] = false;
+    });
+
+    function drawPlayer() {
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
+
+    function movePlayer() {
+        if (keys['ArrowUp']) player.y -= player.speed;
+        if (keys['ArrowDown']) player.y += player.speed;
+        if (keys['ArrowLeft']) player.x -= player.speed;
+        if (keys['ArrowRight']) player.x += player.speed;
+        
+        if (player.x < 0) player.x = 0;
+        if (player.x + player.width > canvas.width) player.x = canvas.width - player.width; 
+        if (player.y < 0) player.y = 0;
+        if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
+    }
+
+    function createRock() {
+        if (gameOver) return;
+        const rock = {
+            x: Math.random() * (canvas.width - 30),
+            y: -30,
+            width: 30,
+            height: 30,
+            // 난이도(currentLevel)가 높을수록 바위가 떨어지는 속도도 약간 증가
+            speed: (Math.random() * 3 + 2) + (currentLevel * 0.5), 
+            damage: 20
+        };
+        rocks.push(rock);
+    }
+
+    function drawRocks() {
+        ctx.fillStyle = 'gray';
+        for (let rock of rocks) {
+            ctx.beginPath();
+            ctx.arc(rock.x + rock.width / 2, rock.y + rock.height / 2, rock.width / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    
+    function moveRocks() {
+       for (let rock of rocks) {
+            rock.y += rock.speed;
+       }
+       for (let i = rocks.length - 1; i >= 0; i--) {
+            if (rocks[i].y > canvas.height) {
+                rocks.splice(i, 1);
+                score++;
+                scoreText.textContent = score;
+                
+                // 50점 도달 시 승리 처리
+                if (score >= 50) {
+                    winGame();
+                }
+            }
+       }
+    }
+
+    function checkCollision() {
+       for (let i = rocks.length - 1; i >= 0; i--) {
+            const rock = rocks[i];
+            if (player.x < rock.x + rock.width &&
+                player.x + player.width > rock.x &&
+                player.y < rock.y + rock.height &&
+                player.y + player.height > rock.y) {
+                
+                hp -= rock.damage;
+                if (hp < 0) hp = 0;
+                hpText.textContent = hp;
+                rocks.splice(i, 1);
+                
+                if (hp <= 0) {
+                    endGame();
+                }
+            }
+       }
+    }
+
+    function drawHpBar() {
+        ctx.fillStyle = 'lightgray';
+        ctx.fillRect(20, 20, 200, 20);
+        ctx.fillStyle = 'limegreen';
+        if (hp < 30) ctx.fillStyle = 'red'; // 체력이 낮으면 빨간색으로 변경
+        ctx.fillRect(20, 20, hp * 2, 20);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(20, 20, 200, 20);
+    }
+
+    // --- 게임 상태 관리 함수들 ---
+
+    function initDifficultyUI() {
+        document.getElementById("btn1").classList.remove("active");
+        document.getElementById("btn2").classList.remove("active");
+        document.getElementById("btn3").classList.remove("active");
+        document.getElementById("btn" + currentLevel).classList.add("active");
+
+        if (currentLevel === 1) difficultyText.textContent = "1단계 (쉬움)";
+        else if (currentLevel === 2) difficultyText.textContent = "2단계 (보통)";
+        else if (currentLevel === 3) difficultyText.textContent = "3단계 (어려움)";
+    }
+
+    function setDifficulty(level, rate) {
+        currentLevel = level;
+        rockSpawnRate = rate;
+
+        localStorage.setItem("player_level", level);
+        localStorage.setItem("rock_speed", rate);
+
+        initDifficultyUI();
+
+        // 게임 진행 중일 경우 바위 생성 타이머(setInterval)만 갱신
+        if (!gameOver) {
+            clearInterval(rockInterval);
+            rockInterval = setInterval(createRock, rockSpawnRate);
+        }
+    }
+
+    function endGame() {
+        gameOver = true;
+        resultTitle.textContent = "게임 오버 😭";
+        finalScore.textContent = score;
+        gameOverScreen.style.display = "flex"; // CSS flex를 사용해 가운데 정렬
+    }
+
+    function winGame() {
+        gameOver = true;
+        resultTitle.textContent = "게임 승리! 🎉";
+        finalScore.textContent = score;
+        gameOverScreen.style.display = "flex";
+    }
+
+    function restartGame() {
+        // 모든 변수와 위치를 초기화
+        gameOver = false;
+        score = 0;
+        hp = 100;
+        rocks = [];
+        player.x = 280;
+        player.y = 330;
+
+        scoreText.textContent = score;
+        hpText.textContent = hp;
+        
+        gameOverScreen.style.display = "none";
+
+        // 기존 바위 타이머를 초기화하고 새로 시작
+        clearInterval(rockInterval);
+        rockInterval = setInterval(createRock, rockSpawnRate);
+        
+        // 애니메이션 루프 재실행
+        gameLoop();
+    }
+
+    function gameLoop() {
+        if (gameOver) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        movePlayer();
+        drawPlayer();
+        moveRocks();
+        checkCollision();
+        drawRocks();
+        drawHpBar();
+
+        animationId = requestAnimationFrame(gameLoop);
+    }
+
+    // --- 최초 실행부 ---
+    initDifficultyUI();
+    rockInterval = setInterval(createRock, rockSpawnRate);
+    gameLoop();
+</script>
+</body>
+</html>
