@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Space Shooter Extended</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            background-color: #222;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #controls {
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            margin: 0 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #444;
+            color: white;
+            transition: 0.2s;
+        }
+
+        .btn.active {
+            background-color: deepskyblue;
+            color: black;
+        }
+
+        .btn:hover {
+            opacity: 0.8;
+        }
+
+        #startBtn {
+            background-color: #28a745;
+            font-size: 16px;
+            padding: 10px 24px;
+            margin-left: 10px;
+        }
+
+        canvas {
+            border: 2px solid #555;
+            background: #111;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #info {
+            font-size: 18px;
+            margin: 10px 0;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .color-box {
+            width: 12px;
+            height: 12px;
+            display: inline-block;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Space Shooter</h1>
+
+    <div id="controls">
+        <span>난이도: </span>
+        <button class="btn" onclick="setDifficulty(1)" id="diff1">1단계 (쉬움)</button>
+        <button class="btn active" onclick="setDifficulty(2)" id="diff2">2단계 (보통)</button>
+        <button class="btn" onclick="setDifficulty(3)" id="diff3">3단계 (어려움)</button>
+        <button class="btn" onclick="startGame()" id="startBtn">게임 시작</button>
+    </div>
+
+    <div id="info">
+        점수: <span id="score">0</span> | 생명: <span id="life">3</span> | 
+        점수2배: <span id="doubleScore">OFF</span> | 폭주(무적+연사): <span id="berserk">OFF</span>
+    </div>
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <div class="legend">
+        <div class="legend-item"><span class="color-box" style="background: crimson;"></span> 일반 적</div>
+        <div class="legend-item"><span class="color-box" style="background: darkorange;"></span> 폭주 적 (처치시 폭주+무적)</div>
+        <div class="legend-item"><span class="color-box" style="background: limegreen;"></span> 생명 회복</div>
+        <div class="legend-item"><span class="color-box" style="background: gold;"></span> 점수 2배</div>
+        <div class="legend-item"><span class="color-box" style="background: purple;"></span> 주변 폭발 (희귀)</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let score = 0;
+        let life = 3;
+        let gameStarted = false;
+        let gameOver = false;
+        let enemyIntervalId = null;
+        let difficulty = 2;
+
+        // 점수 2배 상태 관련
+        let isDoubleScore = false;
+        let doubleScoreTimer = null;
+        let doubleScoreTimeLeft = 0;
+
+        // 플레이어 폭주 상태 관련
+        let isPlayerBerserk = false;
+        let berserkTimer = null;
+        let berserkTimeLeft = 0;
+        let lastAutoShootTime = 0;
+
+        const baseBulletSpeed = 7;
+        let currentBulletSpeed = baseBulletSpeed;
+
+        // 난이도별 설정
+        const diffConfig = {
+            1: { playerSpeed: 8, enemySpeedMin: 1, enemySpeedMax: 2.5, spawnRate: 1400 },
+            2: { playerSpeed: 6, enemySpeedMin: 2, enemySpeedMax: 4.0, spawnRate: 1000 },
+            3: { playerSpeed: 5, enemySpeedMin: 3.5, enemySpeedMax: 6.0, spawnRate: 650 }
+        };
+
+        const player = {
+            x: 280,
+            y: 340,
+            width: 40,
+            height: 40,
+            baseSpeed: diffConfig[2].playerSpeed,
+            speed: diffConfig[2].playerSpeed
+        };
+
+        function setDifficulty(level) {
+            difficulty = level;
+            document.querySelectorAll('#controls .btn:not(#startBtn)').forEach(b => b.classList.remove('active'));
+            document.getElementById(`diff${level}`).classList.add('active');
+            if (gameStarted && !gameOver) {
+                resetGame();
+            }
+        }
+
+        function drawPlayer() {
+            if (isPlayerBerserk) {
+                ctx.fillStyle = 'darkorange';
+            } else {
+                ctx.fillStyle = 'deepskyblue';
+            }
+            
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = 'white';
+            ctx.fillRect(player.x + 15, player.y - 10, 10, 10);
+
+            if (isPlayerBerserk) {
+                ctx.strokeStyle = 'gold';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(player.x - 5, player.y - 15, player.width + 10, player.height + 20);
+            }
+        }
+
+        const keys = {};
+        document.addEventListener('keydown', function (event) {
+            if (['Space', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+                event.preventDefault();
+            }
+            keys[event.code] = true;
+            if (event.code === 'Space' && gameStarted && !gameOver && !isPlayerBerserk) {
+                shootBullet();
+            }
+        });
+
+        document.addEventListener('keyup', function (event) {
+            keys[event.code] = false;
+        });
+
+        canvas.addEventListener('click', function () {
+            if (!gameStarted || gameOver) {
+                startGame();
+            }
+        });
+
+        function movePlayer() {
+            const currentSpeed = isPlayerBerserk ? player.baseSpeed * 2.0 : player.baseSpeed;
+
+            if (keys['ArrowLeft']) player.x -= currentSpeed;
+            if (keys['ArrowRight']) player.x += currentSpeed;
+
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+            if (isPlayerBerserk && keys['Space'] && gameStarted && !gameOver) {
+                const now = Date.now();
+                if (now - lastAutoShootTime > 80) {
+                    shootBullet();
+                    lastAutoShootTime = now;
+                }
+            }
+        }
+
+        const bullets = [];
+
+        // 총알 속도 증가: 10의 배수점수마다 +0.5 상승
+        function updateBulletSpeed() {
+            const bonus = Math.floor(score / 10);
+            currentBulletSpeed = baseBulletSpeed + bonus * 0.5;
+        }
+
+        function shootBullet() {
+            bullets.push({
+                x: player.x + player.width / 2 - 3,
+                y: player.y,
+                width: 6,
+                height: 12,
+                speed: currentBulletSpeed
+            });
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = isPlayerBerserk ? 'orange' : 'yellow';
+            for (let bullet of bullets) {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+        }
+
+        function moveBullets() {
+            for (let bullet of bullets) {
+                bullet.y -= bullet.speed;
+            }
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                if (bullets[i].y + bullets[i].height < 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        const enemies = [];
+
+        function createEnemy() {
+            if (!gameStarted || gameOver) return;
+
+            const cfg = diffConfig[difficulty];
+            const rand = Math.random();
+            let type = 'normal';
+            let color = 'crimson';
+            let speedMult = 1;
+
+            if (rand < 0.05) {
+                type = 'explosion';
+                color = 'purple';
+            } else if (rand < 0.15) {
+                type = 'doubleScore';
+                color = 'gold';
+            } else if (rand < 0.25) {
+                type = 'heal';
+                color = 'limegreen';
+            } else if (rand < 0.35) {
+                type = 'berserk';
+                color = 'darkorange';
+                speedMult = 1.6;
+            }
+
+            const baseSpeed = Math.random() * (cfg.enemySpeedMax - cfg.enemySpeedMin) + cfg.enemySpeedMin;
+
+            enemies.push({
+                x: Math.random() * (canvas.width - 40),
+                y: -40,
+                width: 40,
+                height: 40,
+                speed: baseSpeed * speedMult,
+                type: type,
+                color: color
+            });
+        }
+
+        function drawEnemies() {
+            for (let enemy of enemies) {
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                ctx.strokeStyle = '#000';
+                ctx.strokeRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            }
+        }
+
+        function moveEnemies() {
+            for (let enemy of enemies) {
+                enemy.y += enemy.speed;
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    takeDamage();
+                }
+            }
+        }
+
+        function triggerScreenExplosion() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const addScore = isDoubleScore ? 2 : 1;
+            score += enemies.length * addScore;
+            enemies.length = 0;
+
+            takeDamage();
+            updateScoreUI();
+        }
+
+        function activateDoubleScore() {
+            isDoubleScore = true;
+            doubleScoreTimeLeft = 5;
+            document.getElementById('doubleScore').textContent = 'ON (5s)';
+
+            if (doubleScoreTimer) clearInterval(doubleScoreTimer);
+
+            doubleScoreTimer = setInterval(() => {
+                doubleScoreTimeLeft--;
+                if (doubleScoreTimeLeft > 0) {
+                    document.getElementById('doubleScore').textContent = `ON (${doubleScoreTimeLeft}s)`;
+                } else {
+                    isDoubleScore = false;
+                    document.getElementById('doubleScore').textContent = 'OFF';
+                    clearInterval(doubleScoreTimer);
+                }
+            }, 1000);
+        }
+
+        function activateBerserk() {
+            isPlayerBerserk = true;
+            berserkTimeLeft = 5;
+            document.getElementById('berserk').textContent = 'ON (5s)';
+
+            if (berserkTimer) clearInterval(berserkTimer);
+
+            berserkTimer = setInterval(() => {
+                berserkTimeLeft--;
+                if (berserkTimeLeft > 0) {
+                    document.getElementById('berserk').textContent = `ON (${berserkTimeLeft}s)`;
+                } else {
+                    isPlayerBerserk = false;
+                    document.getElementById('berserk').textContent = 'OFF';
+                    clearInterval(berserkTimer);
+                }
+            }, 1000);
+        }
+
+        function checkBulletEnemyCollision() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+
+                    if (bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y) {
+
+                        const hitEnemy = enemies[j];
+                        bullets.splice(i, 1);
+                        enemies.splice(j, 1);
+
+                        score += isDoubleScore ? 2 : 1;
+                        updateScoreUI();
+
+                        if (hitEnemy.type === 'heal') {
+                            life++;
+                            document.getElementById('life').textContent = life;
+                        } else if (hitEnemy.type === 'doubleScore') {
+                            activateDoubleScore();
+                        } else if (hitEnemy.type === 'berserk') {
+                            activateBerserk();
+                        } else if (hitEnemy.type === 'explosion') {
+                            triggerScreenExplosion();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        function checkPlayerEnemyCollision() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                if (player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y) {
+
+                    enemies.splice(i, 1);
+
+                    if (isPlayerBerserk) {
+                        score += isDoubleScore ? 2 : 1;
+                        updateScoreUI();
+                    } else {
+                        takeDamage();
+                    }
+                }
+            }
+        }
+
+        function takeDamage() {
+            if (isPlayerBerserk) return;
+
+            life--;
+            document.getElementById('life').textContent = life;
+            if (life <= 0) {
+                endGame();
+            }
+        }
+
+        function updateScoreUI() {
+            document.getElementById('score').textContent = score;
+            updateBulletSpeed();
+        }
+
+        function drawStartScreen() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'deepskyblue';
+            ctx.font = '36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('SPACE SHOOTER', canvas.width / 2, canvas.height / 2 - 30);
+
+            ctx.fillStyle = 'white';
+            ctx.font = '18px Arial';
+            ctx.fillText('상단의 [게임 시작] 버튼을 누르거나', canvas.width / 2, canvas.height / 2 + 20);
+            ctx.fillText('화면을 클릭하여 시작하세요!', canvas.width / 2, canvas.height / 2 + 50);
+        }
+
+        function endGame() {
+            gameOver = true;
+            if (enemyIntervalId) clearInterval(enemyIntervalId);
+            if (doubleScoreTimer) clearInterval(doubleScoreTimer);
+            if (berserkTimer) clearInterval(berserkTimer);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'white';
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('게임 오버!', canvas.width / 2, canvas.height / 2 - 40);
+
+            ctx.font = '22px Arial';
+            ctx.fillText('최종 점수: ' + score, canvas.width / 2, canvas.height / 2 + 10);
+
+            ctx.fillStyle = 'deepskyblue';
+            ctx.fillRect(canvas.width / 2 - 80, canvas.height / 2 + 40, 160, 40);
+            ctx.fillStyle = 'black';
+            ctx.font = '18px Arial';
+            ctx.fillText('다시 시작', canvas.width / 2, canvas.height / 2 + 65);
+        }
+
+        function startGame() {
+            resetGame();
+        }
+
+        function resetGame() {
+            score = 0;
+            life = 3;
+            gameStarted = true;
+            gameOver = false;
+            bullets.length = 0;
+            enemies.length = 0;
+
+            isDoubleScore = false;
+            doubleScoreTimeLeft = 0;
+            isPlayerBerserk = false;
+            berserkTimeLeft = 0;
+
+            if (doubleScoreTimer) clearInterval(doubleScoreTimer);
+            if (berserkTimer) clearInterval(berserkTimer);
+            if (enemyIntervalId) clearInterval(enemyIntervalId);
+
+            player.x = canvas.width / 2 - 20;
+            player.baseSpeed = diffConfig[difficulty].playerSpeed;
+
+            document.getElementById('score').textContent = score;
+            document.getElementById('life').textContent = life;
+            document.getElementById('doubleScore').textContent = 'OFF';
+            document.getElementById('berserk').textContent = 'OFF';
+
+            updateBulletSpeed();
+            enemyIntervalId = setInterval(createEnemy, diffConfig[difficulty].spawnRate);
+
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (!gameStarted || gameOver) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            movePlayer();
+            drawPlayer();
+
+            moveBullets();
+            drawBullets();
+
+            moveEnemies();
+            drawEnemies();
+
+            checkBulletEnemyCollision();
+            checkPlayerEnemyCollision();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        drawStartScreen();
+    </script>
+</body>
+
+</html>
